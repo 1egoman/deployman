@@ -1,0 +1,13 @@
+[{
+  "name": "ikeaify",
+  "anonRead": false,
+  "users": [
+    {
+      "user": {
+        "username": "demo",
+        "password": "demo"
+      },
+      "permissions": ["R", "W"]
+    }
+  ]
+}]
