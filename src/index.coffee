@@ -30,37 +30,130 @@ bodyParser = require "body-parser"
 
 
 repos_root = path.join(__dirname, "..", "repos")
+cache_root = path.join(__dirname, "..", "cache")
 
 {ncp} = require "ncp"
 mkdirp = require "mkdirp"
+{exec, spawn} = require "child_process"
+async = require "async"
+rmdirRecursive = require 'rmdir-recursive'
 
-GitServer = require('git-server')
-newUser = {
-    username:'demo',
-    password:'demo'
-}
-newRepo = {
-    name:'myrepo',
-    anonRead:false,
-    users: [
-        { user:newUser, permissions:['R','W'] }
-    ]
-}
-server = new GitServer([ newRepo ])
-server.on 'post-update', (update, repo) ->
-  console.log repo
+# indent logs
+header = ->
+  args = Array.prototype.slice.call arguments
+  args.unshift "------>"
+  rawLog.apply this, args
+log = ->
+  args = Array.prototype.slice.call arguments
+  args.unshift "       "
+  rawLog.apply this, args
+rawLog = ->
+  args = Array.prototype.slice.call arguments
+  console.log args.join ' '
 
-# do (repo=path:"/tmp/repos/myrepo.git") ->
+# GitServer = require('git-server')
+# newUser = {
+#     username:'demo',
+#     password:'demo'
+# }
+# newRepo = {
+#     name:'myrepo',
+#     anonRead:false,
+#     users: [
+#         { user:newUser, permissions:['R','W'] }
+#     ]
+# }
+# server = new GitServer([ newRepo ])
+# server.on 'post-update', (update, repo) ->
+#   console.log repo
+
+do (repo=path:"/tmp/repos/myrepo.git") ->
   appl_name = "appl"
   appl_root = path.join(repos_root, appl_name)
-  mkdirp appl_root, (err) ->
-    return console.error(err) if err
-    console.log repo.path, path.join(appl_root, ".git"), appl_name
+  appl_cache_root = path.join(cache_root, appl_name)
 
-    # copy the repo to the intial directory
-    ncp repo.path, path.join(appl_root, ".git"), appl_name, (err) ->
-     return console.error(err) if err
-     console.log('done!')
+  buildpack_url = "https://github.com/heroku/heroku-buildpack-nodejs.git"
+  buildpack_name = "nodejs"
+
+  console.log repo.path, path.join(appl_root, ".git"), appl_name
+  
+  header "Building #{chalk.green appl_name}@#{chalk.cyan repo.path}..."
+  async.waterfall [
+
+    # make the build cache
+    (cb) ->
+      header "Making build cache..."
+      mkdirp appl_cache_root, cb
+
+    # make the appl_root
+    (data, cb) ->
+      header "Making app root..."
+      mkdirp appl_root, cb
+
+    # checkout the repo into the appl_root
+    (data, cb) ->
+      header "Checking out app repo..."
+      exec "cd #{repo.path}; GIT_WORK_TREE=#{appl_root} git checkout -f", cb
+
+    # make the buildpacks folder if it doesn't exist
+    (out, err, cb) ->
+      mkdirp "/tmp/buildpacks", cb
+
+    # delete any previously deployed instance configs
+    # FIXME should this be neccisary to successfully build?
+    (data, cb) ->
+      rmdirRecursive path.join(appl_root, ".heroku"), cb
+
+    # download the heroku buildpack
+    (cb) ->
+      header "Fetching buildpack..."
+      exec "git clone #{buildpack_url} /tmp/buildpacks/#{buildpack_name}", (err) ->
+        # the buildpack has already been cloned, so ignore.
+        if err and err.code is 128
+          cb null
+        else if err
+          cb err
+        else
+          cb null
+
+    # build the app using the heroku buildpack
+    (cb) ->
+      # exec "cd /tmp/buildpacks/#{buildpack_name}; ./bin/compile #{appl_root} #{appl_cache_root}"
+      console.log appl_root, appl_cache_root
+      child = spawn "bin/compile", [appl_root, appl_cache_root], cwd: "/tmp/buildpacks/#{buildpack_name}"
+
+
+      child.stdout.on 'data', (buffer) ->
+        s = buffer.toString().trim '\n'
+        rawLog s
+      child.stdout.on 'data', (buffer) ->
+        s = buffer.toString().trim '\n'
+        rawLog s
+      child.stdout.on 'end', -> cb null
+      child.stderr.on 'end', (buffer) -> cb buffer
+
+    # and, we're done!
+    # (o, e, cb) ->
+    #   log "Done! #{chalk.cyan repo.path} has been deployed!"
+    #   cb()
+
+  ], (err) ->
+    console.log arguments
+    console.log err
+
+    # run bin/compile
+
+    # start a docker container
+
+    # start the app!
+
+
+
+
+  # copy the repo to the intial directory
+  # ncp repo.path, path.join(appl_root, ".git"), appl_name, (err) ->
+   # return console.error(err) if err
+   # console.log('done!')
 
 
 
