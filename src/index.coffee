@@ -80,6 +80,7 @@ server.server_callback = (req, res, next)->
 # user pushed their branch to us!
 server.on 'post-update', (update, repo) ->
   # console.log update, repo
+  got_all = false
 
 # do (repo=path:"/tmp/repos/myrepo.git") ->
   appl_name = "appl"
@@ -91,7 +92,7 @@ server.on 'post-update', (update, repo) ->
 
   # console.log repo.path, path.join(appl_root, ".git"), appl_name
   
-  header "Building #{chalk.green appl_name}@#{chalk.cyan repo.path}..."
+  header "Deploying #{chalk.green appl_name}@#{chalk.cyan repo.path}..."
   async.waterfall [
 
     # make the appl_root
@@ -140,7 +141,7 @@ server.on 'post-update', (update, repo) ->
 
     (cb) ->
       header "Running Docker image..."
-      child = spawn "docker", "run -b -p #{appl_port} #{appl_name}".split ' '
+      child = spawn "docker", "run -d -p #{appl_port} #{appl_name}".split ' '
 
       child.stdout.on 'data', (buffer) ->
         s = buffer.toString().trim '\n'
@@ -155,27 +156,23 @@ server.on 'post-update', (update, repo) ->
       child.on 'error', (err) -> cb err
 
 
-    # and, we're done!
     (cb) ->
-      log "Done! #{chalk.cyan repo.path} has been deployed!"
-      cb()
+
+      # get its exposed port...
+      require('docker-ps') (err, containers) ->
+        if not got_all
+          got_all = true
+          header "Exposed ports:"
+
+          containers.filter((c) -> appl_name is c.image).forEach (i) ->
+            log "#{chalk.green i.id[...4]} exposes #{JSON.stringify(i.ports)}"
+
+          # and, we're done!
+          header "Done! #{chalk.cyan repo.path} has been deployed!"
+          cb()
 
   ], (err) ->
     console.log err
-
-    # run bin/compile
-
-    # start a docker container
-
-    # start the app!
-
-
-
-
-  # copy the repo to the intial directory
-  # ncp repo.path, path.join(appl_root, ".git"), appl_name, (err) ->
-   # return console.error(err) if err
-   # console.log('done!')
 
 
 
