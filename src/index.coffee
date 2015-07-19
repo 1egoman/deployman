@@ -37,6 +37,7 @@ mkdirp = require "mkdirp"
 {exec, spawn} = require "child_process"
 async = require "async"
 rmdirRecursive = require 'rmdir-recursive'
+fs = require "fs"
 
 # indent logs
 header = ->
@@ -51,31 +52,32 @@ rawLog = ->
   args = Array.prototype.slice.call arguments
   console.log args.join ' '
 
-# GitServer = require('git-server')
-# newUser = {
-#     username:'demo',
-#     password:'demo'
-# }
-# newRepo = {
-#     name:'myrepo',
-#     anonRead:false,
-#     users: [
-#         { user:newUser, permissions:['R','W'] }
-#     ]
-# }
-# server = new GitServer([ newRepo ])
-# server.on 'post-update', (update, repo) ->
-#   console.log repo
+GitServer = require('git-server')
+newUser = {
+    username:'demo',
+    password:'demo'
+}
+newRepo = {
+    name:'myrepo',
+    anonRead:false,
+    users: [
+        { user:newUser, permissions:['R','W'] }
+    ]
+}
+server = new GitServer([ newRepo ])
+server.on 'post-update', (update, repo) ->
+  console.log repo
 
-do (repo=path:"/tmp/repos/myrepo.git") ->
+# do (repo=path:"/tmp/repos/myrepo.git") ->
   appl_name = "appl"
   appl_root = path.join(repos_root, appl_name)
   appl_cache_root = path.join(cache_root, appl_name)
+  appl_port = 8000
 
   buildpack_url = "https://github.com/heroku/heroku-buildpack-nodejs.git"
   buildpack_name = "nodejs"
 
-  console.log repo.path, path.join(appl_root, ".git"), appl_name
+  # console.log repo.path, path.join(appl_root, ".git"), appl_name
   
   header "Building #{chalk.green appl_name}@#{chalk.cyan repo.path}..."
   async.waterfall [
@@ -104,24 +106,30 @@ do (repo=path:"/tmp/repos/myrepo.git") ->
     (data, cb) ->
       rmdirRecursive path.join(appl_root, ".heroku"), cb
 
-    # download the heroku buildpack
-    (cb) ->
-      header "Fetching buildpack..."
-      exec "git clone #{buildpack_url} /tmp/buildpacks/#{buildpack_name}", (err) ->
-        # the buildpack has already been cloned, so ignore.
-        if err and err.code is 128
-          cb null
-        else if err
-          cb err
-        else
-          cb null
+    # # download the heroku buildpack
+    # (cb) ->
+    #   header "Fetching buildpack..."
+    #   exec "git clone #{buildpack_url} /tmp/buildpacks/#{buildpack_name}", (err) ->
+    #     # the buildpack has already been cloned, so ignore.
+    #     if err and err.code is 128
+    #       cb null
+    #     else if err
+    #       cb err
+    #     else
+    #       cb null
 
-    # build the app using the heroku buildpack
+    # create Dockerfile
     (cb) ->
-      # exec "cd /tmp/buildpacks/#{buildpack_name}; ./bin/compile #{appl_root} #{appl_cache_root}"
-      console.log appl_root, appl_cache_root
-      child = spawn "bin/compile", [appl_root, appl_cache_root], cwd: "/tmp/buildpacks/#{buildpack_name}"
+      header "Creating Dockerfile..."
+      fs.writeFile path.join(appl_root, "Dockerfile"), """
+      FROM tutum/buildstep
+      EXPOSE #{appl_port}
+      CMD ["/start", "web"]
+      """, cb
 
+    (cb) ->
+      header "Building Docker image..."
+      child = spawn "docker", "build -t #{appl_name} #{appl_root}".split ' '
 
       child.stdout.on 'data', (buffer) ->
         s = buffer.toString().trim '\n'
@@ -132,13 +140,51 @@ do (repo=path:"/tmp/repos/myrepo.git") ->
       child.stdout.on 'end', -> cb null
       child.stderr.on 'end', (buffer) -> cb buffer
 
+      # enoent? check to be sure that the executable exists and can be run.
+      child.on 'error', (err) -> cb err
+
+    (cb) ->
+      header "Running Docker image..."
+      child = spawn "docker", "run -p #{appl_port} #{appl_name}".split ' '
+
+      child.stdout.on 'data', (buffer) ->
+        s = buffer.toString().trim '\n'
+        rawLog s
+      child.stdout.on 'data', (buffer) ->
+        s = buffer.toString().trim '\n'
+        rawLog s
+      child.stdout.on 'end', -> cb null
+      child.stderr.on 'end', (buffer) -> cb buffer
+
+      # enoent? check to be sure that the executable exists and can be run.
+      child.on 'error', (err) -> cb err
+
+
+
+    # build the app using the heroku buildpack
+    # (cb) ->
+    #   console.log appl_root, appl_cache_root
+    #   child = spawn "bin/compile", [appl_root, appl_cache_root], cwd: "/tmp/buildpacks/#{buildpack_name}"
+    #
+    #
+    #   child.stdout.on 'data', (buffer) ->
+    #     s = buffer.toString().trim '\n'
+    #     rawLog s
+    #   child.stdout.on 'data', (buffer) ->
+    #     s = buffer.toString().trim '\n'
+    #     rawLog s
+    #   child.stdout.on 'end', -> cb null
+    #   child.stderr.on 'end', (buffer) -> cb buffer
+    #
+    #   # enoent? check to be sure that bin/compile exists and can be run.
+    #   child.on 'error', (err) -> cb err
+
     # and, we're done!
     # (o, e, cb) ->
     #   log "Done! #{chalk.cyan repo.path} has been deployed!"
     #   cb()
 
   ], (err) ->
-    console.log arguments
     console.log err
 
     # run bin/compile
