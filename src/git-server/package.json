@@ -1,0 +1,71 @@
+{
+  "name": "git-server",
+  "version": "0.2.0",
+  "description": "A simple, multi-tenant git server written in NodeJS",
+  "author": {
+    "name": "Quinton Pike",
+    "email": "@quinton.pike"
+  },
+  "contributors": [
+    {
+      "name": "Quinton Pike",
+      "email": "qrpike@gmail.com"
+    }
+  ],
+  "dependencies": {
+    "async": "*",
+    "mkdirp": "*",
+    "cli-table": "*",
+    "pushover": "*",
+    "cli-listener": "*",
+    "commander": "*",
+    "git-emit": "0.0.0",
+    "event-proxy": "0.0.1"
+  },
+  "keywords": [
+    "git",
+    "github",
+    "git server",
+    "git hosting",
+    "git http"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qrpike/NodeJS-Git-Server"
+  },
+  "homepage": "http://qrpike.github.io/NodeJS-Git-Server/host.coffee.html",
+  "main": "host.js",
+  "bin": {
+    "git-server": "cli.js",
+    "gitserver": "cli.js"
+  },
+  "engines": {
+    "node": ">=0.3.7"
+  },
+  "preferGlobal": true,
+  "readme": "#NodeJS Git Server\n=========\n![image](https://raw.github.com/qrpike/NodeJS-Git-Server/master/header.png)\n\n\nA multi-tenant git server using NodeJS.\n\nRead the [Documented Source Code Here](http://qrpike.github.io/NodeJS-Git-Server/host.coffee.html)\n\nMade to be able to support many git repo's and users with Read/Write customizable permissions.\n\n\n## Install Git Server\n=========\nTo install the git server run:\n\n\tnpm install git-server\n\n\n## Example Usage\n=========\nThe GitServer is a very easy to get up and running git server. It uses the [Pushover](https://github.com/substack/pushover) module for listening to git events, and its own layer to do the security for each repo & user.\n\n\tvar GitServer = require('git-server');\n\tvar newUser = {\n\t\tusername:'demo',\n\t\tpassword:'demo'\n\t}\n\tvar newRepo = {\n\t\tname:'myrepo',\n\t\tanonRead:false,\n\t\tusers: [\n\t\t\t{ user:newUser, permissions:['R','W'] }\n\t\t]\n\t}\n\t_g = new GitServer([ newRepo ]);\n\n##### Event Triggers:\nIf you want onSuccessful triggers, you can add them to each repo like so:\n\n\tvar newRepo = {\n\t\tname:'myrepo',\n\t\tanonRead:false,\n\t\tusers: [\n\t\t\t{ user:newUser, permissions:['R','W'] }\n\t\t],\n\t\tonSuccessful : {\n\t\t\tfetch : function( repo, method ){\n\t\t\t\tconsole.log('Successful fetch/pull/clone on repo:',repo.name);\n\t\t\t}\n\t\t\tpush  : function( repo, method ){\n\t\t\t\tconsole.log('PUSHed:', repo.name);\n\t\t\t\t// Possibly do some deploy scripts etc.\n\t\t\t}\n\t\t}\n\t}\n\nWhen we start the git server, it will default to port 7000. We can test this using git on this (or another ) machine.\n\n\tgit clone http://localhost:7000/myrepo.git\n\nSince this repo does *NOT* allow anonymous reading, it will prompt us for a user/pass\n\nTo make this faster, we can use the basic auth structure:\n\n\tgit clone http://demo:demo@localhost:7000/myrepo.git\n\nThis should not prompt you for any user/pass. Also in the future when you push changes, or pull, it will not ask you for this info again. \n\n## HTTPS\n=========\nThe ability to use HTTPS is now implemented for the module (not the cli *yet*). This is important so that your username & password is encrypted when being sent over the wire. If you are not using username/password then you may want to disregard this section.\n\nTo enable HTTPS, send the module the 'cert' param:\n\n\tvar fs = require('fs');\n\tvar certs = {\n\t\tkey\t\t: fs.readFileSync('../certs/privatekey.pem')\n\t\tcert\t: fs.readFileSync('../certs/certificate.pem')\n\t};\n\t_g = new GitServer([ newRepo ], undefined, undefined, undefined, certs);\n\nTo create these certs you can run:\n\n\topenssl genrsa -out privatekey.pem 1024 \n\topenssl req -new -key privatekey.pem -out certrequest.csr \n\topenssl x509 -req -in certrequest.csr -signkey privatekey.pem -out certificate.pem\n\nAlso, be aware that when using HTTPS for the git server, when you try to clone,etc. It will give you an SSL error because git (which uses CURL) cannot verify the SSL Cert. To correct this, install a actual, verified SSL Cert ( Free ones here: [StartCom](http://www.startssl.com/?app=1) )\n\nIf you want to keep using the self signed cert like we created above ^ just tell git to not verify the cert. ( Other ways to do it [here](http://www.f15ijp.com/2012/08/git-ssl-certificate-problem-how-to-turn-off-ssl-validation-for-a-repo/) )\n\n\texport GIT_SSL_NO_VERIFY=true\n\nAnd you are good to go!\n\n## CLI Usage\n=========\n\nWhen you install this package globally using\n\n\tsudo npm install -g git-server\n\nYou will now have a CLI interface you can run and interact with. \n\nGet started by typing `git-server` or `gitserver` into your terminal.\n\nYou should see something similar to this:\n![image](https://raw.github.com/qrpike/NodeJS-Git-Server/master/cli-screenshot.png)\n\nWith this interface you can type the following to see the available commands:\n\n\tgit-server> help\n\nYou will see a list of possible commands, just enter a command and the prompt will ask you for any additional details needed.\n\n## TODO Items\n=========\n- Add HTTPS Support ( partially completed )\n- Add onPush & onFetch actions for repos\n- Make YouTube demo of the app\n\n### This is a work in progress - please feel free to contribute!\nplease contribute\n#License\n=========\n(The MIT License)\n\nCopyright (c) 2010 [Quinton Pike](https://twitter.com/QuintonPike)\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n",
+  "readmeFilename": "README.md",
+  "bugs": {
+    "url": "https://github.com/qrpike/NodeJS-Git-Server/issues"
+  },
+  "_id": "git-server@0.2.0",
+  "dist": {
+    "shasum": "c3a1a2fc6ee60006726e9531702fd83dd462e471",
+    "tarball": "http://registry.npmjs.org/git-server/-/git-server-0.2.0.tgz"
+  },
+  "_from": "git-server@*",
+  "_npmVersion": "1.3.11",
+  "_npmUser": {
+    "name": "qrpike",
+    "email": "qrpike@gmail.com"
+  },
+  "maintainers": [
+    {
+      "name": "qrpike",
+      "email": "qrpike@gmail.com"
+    }
+  ],
+  "directories": {},
+  "_shasum": "c3a1a2fc6ee60006726e9531702fd83dd462e471",
+  "_resolved": "https://registry.npmjs.org/git-server/-/git-server-0.2.0.tgz"
+}

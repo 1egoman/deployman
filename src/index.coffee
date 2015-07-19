@@ -30,7 +30,6 @@ bodyParser = require "body-parser"
 
 
 repos_root = path.join(__dirname, "..", "repos")
-cache_root = path.join(__dirname, "..", "cache")
 
 {ncp} = require "ncp"
 mkdirp = require "mkdirp"
@@ -52,7 +51,7 @@ rawLog = ->
   args = Array.prototype.slice.call arguments
   console.log args.join ' '
 
-GitServer = require('git-server')
+GitServer = require './git-server'
 newUser = {
     username:'demo',
     password:'demo'
@@ -64,14 +63,27 @@ newRepo = {
         { user:newUser, permissions:['R','W'] }
     ]
 }
-server = new GitServer([ newRepo ])
+server = new GitServer [newRepo], header
+
+# highjack our server and display stats
+server.server_callback = (req, res, next)->
+  if req.url is '/'
+    res.writeHead(400, {'Content-Type': 'text/plain'})
+    res.end "hi"
+  else
+    next()
+  # app.on 'request', (req, res) ->
+  #   if req.url is '/'
+  #     res.send "WOW!"
+    # console.log req, res
+
+# user pushed their branch to us!
 server.on 'post-update', (update, repo) ->
-  console.log repo
+  # console.log update, repo
 
 # do (repo=path:"/tmp/repos/myrepo.git") ->
   appl_name = "appl"
   appl_root = path.join(repos_root, appl_name)
-  appl_cache_root = path.join(cache_root, appl_name)
   appl_port = 8000
 
   buildpack_url = "https://github.com/heroku/heroku-buildpack-nodejs.git"
@@ -82,13 +94,8 @@ server.on 'post-update', (update, repo) ->
   header "Building #{chalk.green appl_name}@#{chalk.cyan repo.path}..."
   async.waterfall [
 
-    # make the build cache
-    (cb) ->
-      header "Making build cache..."
-      mkdirp appl_cache_root, cb
-
     # make the appl_root
-    (data, cb) ->
+    (cb) ->
       header "Making app root..."
       mkdirp appl_root, cb
 
@@ -105,18 +112,6 @@ server.on 'post-update', (update, repo) ->
     # FIXME should this be neccisary to successfully build?
     (data, cb) ->
       rmdirRecursive path.join(appl_root, ".heroku"), cb
-
-    # # download the heroku buildpack
-    # (cb) ->
-    #   header "Fetching buildpack..."
-    #   exec "git clone #{buildpack_url} /tmp/buildpacks/#{buildpack_name}", (err) ->
-    #     # the buildpack has already been cloned, so ignore.
-    #     if err and err.code is 128
-    #       cb null
-    #     else if err
-    #       cb err
-    #     else
-    #       cb null
 
     # create Dockerfile
     (cb) ->
@@ -145,7 +140,7 @@ server.on 'post-update', (update, repo) ->
 
     (cb) ->
       header "Running Docker image..."
-      child = spawn "docker", "run -p #{appl_port} #{appl_name}".split ' '
+      child = spawn "docker", "run -b -p #{appl_port} #{appl_name}".split ' '
 
       child.stdout.on 'data', (buffer) ->
         s = buffer.toString().trim '\n'
@@ -160,29 +155,10 @@ server.on 'post-update', (update, repo) ->
       child.on 'error', (err) -> cb err
 
 
-
-    # build the app using the heroku buildpack
-    # (cb) ->
-    #   console.log appl_root, appl_cache_root
-    #   child = spawn "bin/compile", [appl_root, appl_cache_root], cwd: "/tmp/buildpacks/#{buildpack_name}"
-    #
-    #
-    #   child.stdout.on 'data', (buffer) ->
-    #     s = buffer.toString().trim '\n'
-    #     rawLog s
-    #   child.stdout.on 'data', (buffer) ->
-    #     s = buffer.toString().trim '\n'
-    #     rawLog s
-    #   child.stdout.on 'end', -> cb null
-    #   child.stderr.on 'end', (buffer) -> cb buffer
-    #
-    #   # enoent? check to be sure that bin/compile exists and can be run.
-    #   child.on 'error', (err) -> cb err
-
     # and, we're done!
-    # (o, e, cb) ->
-    #   log "Done! #{chalk.cyan repo.path} has been deployed!"
-    #   cb()
+    (cb) ->
+      log "Done! #{chalk.cyan repo.path} has been deployed!"
+      cb()
 
   ], (err) ->
     console.log err
