@@ -165,14 +165,14 @@ server.on 'post-update', (update, repo) ->
           header "Exposed ports:"
 
           containers.filter((c) -> appl_name is c.image).forEach (i) ->
-            log "#{chalk.green i.id[...4]} exposes #{JSON.stringify(i.ports)}"
+            log "#{chalk.cyan i.command} (#{chalk.green i.id[...4]}) exposes port(s) #{chalk.yellow JSON.stringify(i.ports)}"
 
           # and, we're done!
           header "Done! #{chalk.cyan repo.path} has been deployed!"
           cb()
 
   ], (err) ->
-    console.log err
+    console.log err if err
 
 
 
