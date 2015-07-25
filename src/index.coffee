@@ -199,17 +199,25 @@ exports.main = ->
         when "post" then r = request.post data
         when "delete" then r = request.del data
         else return res.send("invalid method")
+      r.on 'error', (e) ->
+        res.send "Error contacting host: #{e}"
       req.pipe(r).pipe(res)
 
 
 
-    # redirect to the specified app
-    app.get '/', (req, res) ->
+    # Try One
+    # See if the user is accessing with a folder-like port
+    # Like "example.com/12345"
+    app.get '/:port(\\d+)/', (req, res) ->
+      req.url = req.url[req.params.port.length+1..]
+      proxy req, res, req.params.port
+
+    # Try Two
+    # See if the user is accessing with a subdomain
+    # Like "appl_name.example.com"
+    app.use (req, res) ->
       host = req.headers.host
 
-      # Try One
-      # See if the user is accessing with a subdomain
-      # Like "appl_name.example.com"
       appl_name = host.split('.')[0]
       if appl_name and appl_name.length and not host.match /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}/
 
@@ -236,13 +244,9 @@ exports.main = ->
 
 
 
-    app.get '/:port', (req, res) ->
 
-      # Try Two
-      # See if the user is accessing with a folder-like port
-      # Like "example.com/12345"
-      if req.url isnt '/' and parseInt req.params.port
-        proxy req, res, req.params.port
+
+
 
 
 
