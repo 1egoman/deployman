@@ -87,42 +87,48 @@
           push: 'W'
         };
         this.gitListeners();
+
+
+
         this.makeReposIfNull(function() {
-          _this.bindEvents(function() {
-            var message, red, reset;
-            if (_this.certs != null) {
-              _this.server = https.createServer(_this.certs, function(req, res) {
-                // let us hijack the server
-                if (_this.server_callback) {
-                  _this.server_callback(req, res, function() {
-                    _this.git.handle.apply(_this.git, [req, res])
-                  })
-                } else {
-                  _this.git.handle.apply(_this.git, [req, res])
-                }
-              });
-            } else {
-              red = '\033[31m';
-              reset = '\033[0m';
-              message = "WARNING: No SSL certs passed in. Running as HTTP and not HTTPS.\nBe careful, without HTTPS your user/pass will not be encrypted";
-              console.log(red + message + reset);
-              _this.server = http.createServer(function(req, res) {
-                // let us hijack the server
-                if (_this.server_callback) {
-                  _this.server_callback(req, res, function() {
-                    _this.git.handle.apply(_this.git, [req, res])
-                  })
-                } else {
-                  _this.git.handle.apply(_this.git, [req, res])
-                }
-              });
-            }
-            return _this.server.listen(_this.port, function() {
-              return _this.log('Server listening on ', _this.port, '\r');
-            });
-          });
+          // _this.bindEvents(function() {
+          //   var message, red, reset;
+          //   if (_this.certs != null) {
+          //     _this.server = https.createServer(_this.certs, function(req, res) {
+          //       // let us hijack the server
+          //       if (_this.server_callback) {
+          //         _this.server_callback(req, res, function() {
+          //           _this.git.handle.apply(_this.git, [req, res])
+          //         })
+          //       } else {
+          //         _this.git.handle.apply(_this.git, [req, res])
+          //       }
+          //     });
+          //   } else {
+          //     red = '\033[31m';
+          //     reset = '\033[0m';
+          //     message = "WARNING: No SSL certs passed in. Running as HTTP and not HTTPS.\nBe careful, without HTTPS your user/pass will not be encrypted";
+          //     console.log(red + message + reset);
+          //     _this.server = http.createServer(function(req, res) {
+          //       // let us hijack the server
+          //       if (_this.server_callback) {
+          //         _this.server_callback(req, res, function() {
+          //           _this.git.handle.apply(_this.git, [req, res])
+          //         })
+          //       } else {
+          //         _this.git.handle.apply(_this.git, [req, res])
+          //       }
+          //     });
+          //   }
+          //   return _this.server.listen(_this.port, function() {
+          //     return _this.log('Server listening on ', _this.port, '\r');
+          //   });
+          // });
         });
       }
+
+
+
 
       GitServer.prototype.bindEvents = function(callback) {
         var self = this;
@@ -161,10 +167,14 @@
         callback();
       }
 
+
+
+
   /*
       Create a repo on the fly
       @param {Object} repoName Name of the repo we are creating.
       */
+
 
 
       GitServer.prototype.createRepo = function(repo, callback) {

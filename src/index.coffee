@@ -13,22 +13,6 @@ chalk = require "chalk"
 path = require "path"
 bodyParser = require "body-parser"
 
-# initialize pushover for git events
-# pushover = require "pushover"
-# git = pushover path.join(__dirname, "repos")
-#
-#
-# git.on 'push', (push) ->
-#     console.log('push ' + push.repo + '/' + push.commit
-#         + ' (' + push.branch + ')'
-#     )
-#     push.accept()
-#
-# git.on 'fetch', (fetch) ->
-#     console.log('fetch ' + fetch.commit)
-#     fetch.accept()
-
-
 repos_root = path.join(__dirname, "..", "repos")
 
 {ncp} = require "ncp"
@@ -38,19 +22,7 @@ async = require "async"
 rmdirRecursive = require 'rmdir-recursive'
 fs = require "fs"
 ps = require 'docker-ps'
-
-# indent logs
-header = ->
-  args = Array.prototype.slice.call arguments
-  args.unshift "------>"
-  rawLog.apply this, args
-log = ->
-  args = Array.prototype.slice.call arguments
-  args.unshift "       "
-  rawLog.apply this, args
-rawLog = ->
-  args = Array.prototype.slice.call arguments
-  console.log args.join ' '
+{header, log, rawLog} = require './logger'
 
 GitServer = require './git-server'
 newUser = {
@@ -69,59 +41,57 @@ reload_config = (cb) ->
       catch e
         cb e
 
-reload_config (err, data) ->
-  return header "Config error: #{err}" if err
 
-  # craete gitserver
-  server = new GitServer data, header
+  # create gitserver
 
-  # highjack our server and display stats
-  server.server_callback = (req, res, next)->
-    # home page to reload config
-    if req.method is 'GET' and req.url is '/'
-      res.writeHead(200, {'Content-Type': 'text/html'})
-      res.end """
-      Hey, you've run into deployman!
-      <form method="POST" action="/reload_config">
-        <input type="submit" value="Update config" />
-      </form>
-      """
-
-    # reload config
-    # /reload_config - reload the config
-    else if req.method is 'POST' and req.url is '/reload_config'
-      reload_config (err, data) ->
-        if err
-          header "Config error: #{err}"
-          res.end err
-        else
-          server.repos = data
-          header "Reloaded Config!"
-          res.end "Reloaded Config: #{JSON.stringify data, null, 2}"
-
-    # get running processes
-    # /ps - all processes
-    # /ps/:name - all processes that were build with the specified image
-    else if req.method is 'GET' and req.url.indexOf('/ps') is 0
-      cont_name = req.url[4..] or null
-      ps (err, containers) ->
-        res.end JSON.stringify containers.filter((a) ->
-          if cont_name
-            a.image is cont_name
-          else
-            true
-        ), null, 2
-
-
-    else
-      next()
-    # app.on 'request', (req, res) ->
-    #   if req.url is '/'
-    #     res.send "WOW!"
-      # console.log req, res
-      #
-
+  # # highjack our server and display stats
+  # server.server_callback = (req, res, next)->
+  #   # home page to reload config
+  #   if req.method is 'GET' and req.url is '/'
+  #     res.writeHead(200, {'Content-Type': 'text/html'})
+  #     res.end """
+  #     Hey, you've run into deployman!
+  #     <form method="POST" action="/reload_config">
+  #       <input type="submit" value="Update config" />
+  #     </form>
+  #     """
+  #
+  #   # reload config
+  #   # /reload_config - reload the config
+  #   else if req.method is 'POST' and req.url is '/reload_config'
+  #     reload_config (err, data) ->
+  #       if err
+  #         header "Config error: #{err}"
+  #         res.end err
+  #       else
+  #         server.repos = data
+  #         header "Reloaded Config!"
+  #         res.end "Reloaded Config: #{JSON.stringify data, null, 2}"
+  #
+  #   # get running processes
+  #   # /ps - all processes
+  #   # /ps/:name - all processes that were build with the specified image
+  #   else if req.method is 'GET' and req.url.indexOf('/ps') is 0
+  #     cont_name = req.url[4..] or null
+  #     ps (err, containers) ->
+  #       res.end JSON.stringify containers.filter((a) ->
+  #         if cont_name
+  #           a.image is cont_name
+  #         else
+  #           true
+  #       ), null, 2
+  #
+  #
+  #   else
+  #     next()
+  #   # app.on 'request', (req, res) ->
+  #   #   if req.url is '/'
+  #   #     res.send "WOW!"
+  #     # console.log req, res
+  #     #
+  #
   # user pushed their branch to us!
+exports.on_push = (server) ->
   server.on 'post-update', (update, repo) ->
     # console.log update, repo
     got_all = false
@@ -216,19 +186,28 @@ reload_config (err, data) ->
 
 exports.main = ->
 
-  # set ejs as view engine
-  app.set "view engine", "ejs"
+  # get config
+  reload_config (err, data) ->
+    return header "Config error: #{err}" if err
+    server = new GitServer data, header
 
-  # before middleware, intercept git events
-  app.use (req, res, next) ->
-    git.handle(req, res)
+    # set ejs as view engine
+    app.set "view engine", "ejs"
 
-  # include all the required middleware
-  exports.middleware app
+    # before middleware, intercept git events
+    # and send them to git-server
+    app.use (req, res, next) ->
+      # if the path starts with a git repo, we send to git-server.
+      if req.url.match /(\/[a-zA-Z0-9_-]+\.git\/)/
+        server.git.handle.apply(server.git, [req, res])
+      next()
 
-  # some sample routes
-  app.get "/", (req, res) ->
-    res.send "'Allo, World!"
+    # include all the required middleware
+    exports.middleware app
+
+    # some sample routes
+    app.get "/", (req, res) ->
+      res.send "'Allo, World!"
 
 
   
@@ -243,4 +222,4 @@ exports.middleware = (app) ->
   # serve static assets
   app.use require("express-static") path.join(__dirname, '../public')
 
-# exports.main()
+exports.main()
