@@ -12,6 +12,7 @@ app = require("express")()
 chalk = require "chalk"
 path = require "path"
 bodyParser = require "body-parser"
+request = require 'request'
 
 repos_root = path.join(__dirname, "..", "repos")
 
@@ -22,13 +23,23 @@ async = require "async"
 rmdirRecursive = require 'rmdir-recursive'
 fs = require "fs"
 ps = require 'docker-ps'
-{header, log, rawLog} = require './logger'
+{header, log, rawLog, set_log_file} = require './logger'
 
 GitServer = require './git-server'
-newUser = {
-    username:'demo',
-    password:'demo'
-}
+
+# object concatination
+collect = ->
+  ret = {}
+  len = arguments.length
+  i = 0
+  while i < len
+    for p of arguments[i]
+      `p = p`
+      if arguments[i].hasOwnProperty(p)
+        ret[p] = arguments[i][p]
+    i++
+  ret
+
 
 # load config from file
 reload_config = (cb) ->
@@ -42,145 +53,107 @@ reload_config = (cb) ->
         cb e
 
 
-  # create gitserver
+# user pushed their branch to us!
+exports.on_push = (update, repo) ->
+  got_all = false
 
-  # # highjack our server and display stats
-  # server.server_callback = (req, res, next)->
-  #   # home page to reload config
-  #   if req.method is 'GET' and req.url is '/'
-  #     res.writeHead(200, {'Content-Type': 'text/html'})
-  #     res.end """
-  #     Hey, you've run into deployman!
-  #     <form method="POST" action="/reload_config">
-  #       <input type="submit" value="Update config" />
-  #     </form>
-  #     """
-  #
-  #   # reload config
-  #   # /reload_config - reload the config
-  #   else if req.method is 'POST' and req.url is '/reload_config'
-  #     reload_config (err, data) ->
-  #       if err
-  #         header "Config error: #{err}"
-  #         res.end err
-  #       else
-  #         server.repos = data
-  #         header "Reloaded Config!"
-  #         res.end "Reloaded Config: #{JSON.stringify data, null, 2}"
-  #
-  #   # get running processes
-  #   # /ps - all processes
-  #   # /ps/:name - all processes that were build with the specified image
-  #   else if req.method is 'GET' and req.url.indexOf('/ps') is 0
-  #     cont_name = req.url[4..] or null
-  #     ps (err, containers) ->
-  #       res.end JSON.stringify containers.filter((a) ->
-  #         if cont_name
-  #           a.image is cont_name
-  #         else
-  #           true
-  #       ), null, 2
-  #
-  #
-  #   else
-  #     next()
-  #   # app.on 'request', (req, res) ->
-  #   #   if req.url is '/'
-  #   #     res.send "WOW!"
-  #     # console.log req, res
-  #     #
-  #
-  # user pushed their branch to us!
-exports.on_push = (server) ->
-  server.on 'post-update', (update, repo) ->
-    # console.log update, repo
-    got_all = false
+  appl_name = repo.path.split('/').reverse()[0].split('.')[...1].join ''
+  appl_root = path.join(repos_root, appl_name)
+  appl_port = process.env.CONTAINER_PORT or 8000
 
-    appl_name = repo.path.split('/').reverse()[0].split('.')[...1].join ''
-    appl_root = path.join(repos_root, appl_name)
-    appl_port = process.env.CONTAINER_PORT or 8000
+  set_log_file path.join(appl_root, "deploy.log")
+  header "Deploying #{chalk.green appl_name}@#{chalk.cyan repo.path}..."
+  async.waterfall [
 
-    header "Deploying #{chalk.green appl_name}@#{chalk.cyan repo.path}..."
-    async.waterfall [
+    # make the  appl_root
+    (cb) ->
+      header "Making app root..."
+      mkdirp appl_root, cb
 
-      # make the appl_root
-      (cb) ->
-        header "Making app root..."
-        mkdirp appl_root, cb
+    # checkout the repo into the appl_root
+    (data, cb) ->
+      header "Checking out app repo..."
+      exec "cd #{repo.path}; GIT_WORK_TREE=#{appl_root} git checkout -f", cb
 
-      # checkout the repo into the appl_root
-      (data, cb) ->
-        header "Checking out app repo..."
-        exec "cd #{repo.path}; GIT_WORK_TREE=#{appl_root} git checkout -f", cb
+    # make the buildpacks folder if it doesn't exist
+    (out, err, cb) ->
+      mkdirp "/tmp/buildpacks", cb
 
-      # make the buildpacks folder if it doesn't exist
-      (out, err, cb) ->
-        mkdirp "/tmp/buildpacks", cb
+    # delete any previously deployed instance configs
+    # FIXME should this be neccisary to successfully build?
+    (data, cb) ->
+      rmdirRecursive path.join(appl_root, ".heroku"), cb
 
-      # delete any previously deployed instance configs
-      # FIXME should this be neccisary to successfully build?
-      (data, cb) ->
-        rmdirRecursive path.join(appl_root, ".heroku"), cb
+    # create Dockerfile
+    (cb) ->
+      header "Creating Dockerfile..."
+      fs.writeFile path.join(appl_root, "Dockerfile"), """
+      FROM tutum/buildstep
+      EXPOSE #{appl_port}
+      CMD ["/start", "web"]
+      """, cb
 
-      # create Dockerfile
-      (cb) ->
-        header "Creating Dockerfile..."
-        fs.writeFile path.join(appl_root, "Dockerfile"), """
-        FROM tutum/buildstep
-        EXPOSE #{appl_port}
-        CMD ["/start", "web"]
-        """, cb
+    (cb) ->
+      header "Building Docker image..."
+      child = spawn "docker", "build -t #{appl_name} #{appl_root}".split ' '
 
-      (cb) ->
-        header "Building Docker image..."
-        child = spawn "docker", "build -t #{appl_name} #{appl_root}".split ' '
+      child.stdout.on 'data', (buffer) ->
+        s = buffer.toString().trim '\n'
+        rawLog s
+      child.stdout.on 'data', (buffer) ->
+        s = buffer.toString().trim '\n'
+        rawLog s
+      child.stdout.on 'end', -> cb null
+      child.stderr.on 'end', (buffer) -> cb buffer
 
-        child.stdout.on 'data', (buffer) ->
-          s = buffer.toString().trim '\n'
-          rawLog s
-        child.stdout.on 'data', (buffer) ->
-          s = buffer.toString().trim '\n'
-          rawLog s
-        child.stdout.on 'end', -> cb null
-        child.stderr.on 'end', (buffer) -> cb buffer
+      # enoent? check to be sure that the executable exists and can be run.
+      child.on 'error', (err) -> cb err
 
-        # enoent? check to be sure that the executable exists and can be run.
-        child.on 'error', (err) -> cb err
+    (cb) ->
+      header "Running Docker image..."
+      child = spawn "docker", "run -d -p #{appl_port} #{appl_name}".split ' '
 
-      (cb) ->
-        header "Running Docker image..."
-        child = spawn "docker", "run -d -p #{appl_port} #{appl_name}".split ' '
+      child.stdout.on 'data', (buffer) ->
+        s = buffer.toString().trim '\n'
+        log s
+      child.stdout.on 'data', (buffer) ->
+        s = buffer.toString().trim '\n'
+        log s
+      child.stdout.on 'end', -> cb null
+      child.stderr.on 'end', (buffer) -> cb buffer
 
-        child.stdout.on 'data', (buffer) ->
-          s = buffer.toString().trim '\n'
-          rawLog s
-        child.stdout.on 'data', (buffer) ->
-          s = buffer.toString().trim '\n'
-          rawLog s
-        child.stdout.on 'end', -> cb null
-        child.stderr.on 'end', (buffer) -> cb buffer
-
-        # enoent? check to be sure that the executable exists and can be run.
-        child.on 'error', (err) -> cb err
+      # enoent? check to be sure that the executable exists and can be run.
+      child.on 'error', (err) -> cb err
 
 
-      (cb) ->
+    (cb) ->
 
-        # get its exposed port...
-        ps (err, containers) ->
-          if not got_all
-            got_all = true
-            header "Exposed ports:"
+      # get its exposed port...
+      ps (err, containers) ->
+        if not got_all
+          got_all = true
+          ports = []
+          header "Exposed ports:"
 
-            containers.filter((c) -> appl_name is c.image).forEach (i) ->
-              log "#{chalk.cyan i.command} (#{chalk.green i.id[...4]}) exposes port(s) #{chalk.yellow JSON.stringify(i.ports)}"
+          containers.filter((c) -> appl_name is c.image).forEach (i) ->
+            log "#{chalk.cyan i.command} (#{chalk.green i.id[...4]}) exposes port(s) #{chalk.yellow JSON.stringify(i.ports)}"
+            ports = collect ports, i.ports
 
-            # and, we're done!
-            header "Done! #{chalk.cyan repo.path} has been deployed!"
-            cb()
+          # write ports to file
+          fs.writeFile path.join(appl_root, "ports.json"), JSON.stringify(ports, null, 2), (err) ->
+            if err
+              cb err
+            else
+              cb null
 
-    ], (err) ->
-      console.log err if err
+    (cb) ->
+      # and, we're done!
+      header "Done! #{chalk.cyan repo.path} has been deployed!"
+      cb null
+
+  ], (err) ->
+    set_log_file null
+    console.log err if err
 
 
 
@@ -189,7 +162,10 @@ exports.main = ->
   # get config
   reload_config (err, data) ->
     return header "Config error: #{err}" if err
+
+    # create new git-server 
     server = new GitServer data, header
+    server.on 'post-update', exports.on_push
 
     # set ejs as view engine
     app.set "view engine", "ejs"
@@ -205,21 +181,94 @@ exports.main = ->
     # include all the required middleware
     exports.middleware app
 
-    # some sample routes
-    app.get "/", (req, res) ->
-      res.send "'Allo, World!"
 
 
-  
+    # proxy to the specified port
+    # this method is called by all the handlers below to quickly proxy
+    # through a request to the correct handler
+    proxy = (req, res, port, proxy_url="127.0.0.1") ->
+      host = req.headers.host
+      log "#{chalk.cyan req.method} #{host}#{req.url} => #{proxy_url}:#{chalk.yellow port}"
+      method = req.method.toLowerCase()
+      data =
+        uri: "http://#{proxy_url}:#{port}#{req.url}"
+        json: req.body
+      switch method
+        when "get" then r = request.get data
+        when "put" then r = request.put data
+        when "post" then r = request.post data
+        when "delete" then r = request.del data
+        else return res.send("invalid method")
+      req.pipe(r).pipe(res)
+
+
+
+    # redirect to the specified app
+    app.get '/', (req, res) ->
+      host = req.headers.host
+
+      # Try One
+      # See if the user is accessing with a subdomain
+      # Like "appl_name.example.com"
+      appl_name = host.split('.')[0]
+      if appl_name and appl_name.length and not host.match /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}/
+
+        # read a list of all the ports the app is running upon
+        appl_root = path.join(repos_root, appl_name)
+        fs.readFile path.join(appl_root, "ports.json"), (err, data) ->
+          if err
+            res.send "Couldn't read from ports.json: #{err}"
+          else
+
+            # pick one at random
+            # TODO There needs to be some better logic here, but
+            # this will work for now. Real Load Balancing?
+            ports = JSON.parse data
+            port = do (obj=ports) ->
+              keys = Object.keys obj
+              keys[keys.length * Math.random() << 0]
+
+            # do the proxy
+            proxy req, res, port
+
+      else
+        res.send "Umm, excuse me? That app doesn't exist."
+
+
+
+    app.get '/:port', (req, res) ->
+
+      # Try Two
+      # See if the user is accessing with a folder-like port
+      # Like "example.com/12345"
+      if req.url isnt '/' and parseInt req.params.port
+        proxy req, res, req.params.port
+
+
+
 
   # listen for requests
-  PORT = process.argv.port or 8000
+  PORT = process.env.PORT or 7000
   app.listen PORT, ->
     console.log chalk.blue "-> :#{PORT}"
+
+
+
+
 
 exports.middleware = (app) ->
 
   # serve static assets
   app.use require("express-static") path.join(__dirname, '../public')
+
+  # logging of requests
+  app.use (req, res, next) ->
+    header chalk.cyan(req.method), req.url, JSON.stringify(req.params), JSON.stringify(req.body or {})
+    next()
+
+
+
+
+
 
 exports.main()

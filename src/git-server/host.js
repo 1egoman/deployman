@@ -91,7 +91,7 @@
 
 
         this.makeReposIfNull(function() {
-          // _this.bindEvents(function() {
+          _this.bindEvents(function() {
           //   var message, red, reset;
           //   if (_this.certs != null) {
           //     _this.server = https.createServer(_this.certs, function(req, res) {
@@ -123,7 +123,7 @@
           //   return _this.server.listen(_this.port, function() {
           //     return _this.log('Server listening on ', _this.port, '\r');
           //   });
-          // });
+          });
         });
       }
 
