@@ -24,6 +24,7 @@ rmdirRecursive = require 'rmdir-recursive'
 fs = require "fs"
 ps = require 'docker-ps'
 {header, log, rawLog, set_log_file} = require './logger'
+admin = require "./admin"
 
 GitServer = require './git-server'
 
@@ -96,6 +97,7 @@ exports.on_push = (update, repo) ->
     (cb) ->
       header "Building Docker image..."
       child = spawn "docker", "build -t #{appl_name} #{appl_root}".split ' '
+      called_back = false
 
       child.stdout.on 'data', (buffer) ->
         s = buffer.toString().trim '\n'
@@ -103,31 +105,70 @@ exports.on_push = (update, repo) ->
       child.stdout.on 'data', (buffer) ->
         s = buffer.toString().trim '\n'
         rawLog s
-      child.stdout.on 'end', -> cb null
-      child.stderr.on 'end', (buffer) -> cb buffer
+      child.stdout.on 'end', ->
+        if not called_back
+          called_back = true
+          cb null
+      child.stderr.on 'end', (buffer) ->
+        if not called_back
+          called_back = true
+          cb buffer
 
       # enoent? check to be sure that the executable exists and can be run.
       child.on 'error', (err) -> cb err
+
+    (cb) ->
+      header "Stopping old Docker containers..."
+      ps (err, containers) ->
+        return cb(err) if err
+        async.forEach containers.filter((c) -> appl_name is c.image), (c, cb) ->
+          exec "docker stop #{c.id} && docker rm #{c.id}", (err, sout, serr) ->
+            log sout.toString().trim '\n'
+            log serr.toString().trim '\n'
+            cb err or null
+        , (err) ->
+          cb err or null
 
     (cb) ->
       header "Running Docker image..."
-      child = spawn "docker", "run -d -p #{appl_port} #{appl_name}".split ' '
+      reload_config (err, data) ->
+        return cb err if err
+        
+        # scale based off of the config settings
+        image = data.filter (d) -> d.name is appl_name
+        if image.length
+          scale = image[0].scale
+        else
+          # nothing in the file, so just spawn one of the default containers
+          log chalk.red "No scaling settings were specified, so we will create 1 web container."
+          scale = web: 1
+        
+        # iterate and spawn the specified number of containers
+        for k,v of scale
+          header "Scaling #{k}@#{v}..."
 
-      child.stdout.on 'data', (buffer) ->
-        s = buffer.toString().trim '\n'
-        log s
-      child.stdout.on 'data', (buffer) ->
-        s = buffer.toString().trim '\n'
-        log s
-      child.stdout.on 'end', -> cb null
-      child.stderr.on 'end', (buffer) -> cb buffer
+          # for iter in [0..v]
+          async.forEach [0..v], (iter, cb) ->
+            header "Spawning container #{k}@#{iter}..."
 
-      # enoent? check to be sure that the executable exists and can be run.
-      child.on 'error', (err) -> cb err
+            child = spawn "docker", "run -d -p #{appl_port} #{appl_name}".split ' '
 
+            child.stdout.on 'data', (buffer) ->
+              s = buffer.toString().trim '\n'
+              log s
+            child.stdout.on 'data', (buffer) ->
+              s = buffer.toString().trim '\n'
+              log s
+            child.stdout.on 'end', -> cb null
+            child.stderr.on 'end', (buffer) -> cb buffer
+
+          , (err) ->
+            cb err or null
+
+            # enoent? check to be sure that the executable exists and can be run.
+            child.on 'error', (err) -> cb err
 
     (cb) ->
-
       # get its exposed port...
       ps (err, containers) ->
         if not got_all
@@ -139,7 +180,7 @@ exports.on_push = (update, repo) ->
             log "#{chalk.cyan i.command} (#{chalk.green i.id[...4]}) exposes port(s) #{chalk.yellow JSON.stringify(i.ports)}"
             ports = collect ports, i.ports
 
-          # write ports to file
+          # write config to file
           fs.writeFile path.join(appl_root, "ports.json"), JSON.stringify(ports, null, 2), (err) ->
             if err
               cb err
@@ -176,7 +217,8 @@ exports.main = ->
       # if the path starts with a git repo, we send to git-server.
       if req.url.match /(\/[a-zA-Z0-9_-]+\.git\/)/
         server.git.handle.apply(server.git, [req, res])
-      next()
+      else
+        next()
 
     # include all the required middleware
     exports.middleware app
@@ -203,6 +245,8 @@ exports.main = ->
         res.send "Error contacting host: #{e}"
       req.pipe(r).pipe(res)
 
+    # admin page
+    app.use "/admin", admin.admin_page(data)
 
 
     # Try One
