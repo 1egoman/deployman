@@ -80,9 +80,29 @@ exports.on_push = (update, repo) ->
     (out, err, cb) ->
       mkdirp "/tmp/buildpacks", cb
 
+    # inject PORT=8000
+    # this is so stuff will run correctly within docker and be able to bind
+    # correctly.
+    (data, cb) ->
+      header "Injecting PORT=#{appl_port} into Procfile..."
+      fs.readFile path.join(appl_root, "Procfile"), (err, data) ->
+        return cb err if err
+
+        procfile = data.toString().split('\n').map (ln) ->
+          [start, end] = ln.split ':'
+          if start and end
+            end = "PORT=#{appl_port} #{end.trim ' '}"
+            "#{start}: #{end}"
+          else
+            ''
+
+        fs.writeFile path.join(appl_root, "Procfile"), procfile.join('\n'), (err) ->
+          cb err
+
+
     # delete any previously deployed instance configs
     # FIXME should this be neccisary to successfully build?
-    (data, cb) ->
+    (cb) ->
       rmdirRecursive path.join(appl_root, ".heroku"), cb
 
     # create Dockerfile
@@ -148,7 +168,7 @@ exports.on_push = (update, repo) ->
           header "Scaling #{k}@#{v}..."
 
           # for iter in [0..v]
-          async.forEach [0..v], (iter, cb) ->
+          async.forEach [1..v], (iter, cb) ->
             header "Spawning container #{k}@#{iter}..."
 
             child = spawn "docker", "run -d -p #{appl_port} #{appl_name}".split ' '
@@ -160,13 +180,10 @@ exports.on_push = (update, repo) ->
               s = buffer.toString().trim '\n'
               log s
             child.stdout.on 'end', -> cb null
-            child.stderr.on 'end', (buffer) -> cb buffer
 
           , (err) ->
             cb err or null
-
             # enoent? check to be sure that the executable exists and can be run.
-            child.on 'error', (err) -> cb err
 
     (cb) ->
       # get its exposed port...
