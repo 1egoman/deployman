@@ -79,12 +79,15 @@ exports.main = ->
     # get bound ports
     app.get "/ports", admin.can_we_do_admin_things, (req, res) ->
       if req.query.slug
-        deploy ->
-        if req.query.slug
-          deploy.get_exposed_ports req.query.slug, (ports) ->
+        deploy.get_exposed_ports req.query.slug, (err, ports) ->
+          if err
+            res.send
+              name: "error.slug.ports"
+              data: "Error getting ports for slug: #{err}"
+          else
             res.send ports: ports
-        else
-          res.send "No slug specified. Use ?slug=..."
+      else
+        res.send "No slug specified. Use ?slug=..."
 
 
 

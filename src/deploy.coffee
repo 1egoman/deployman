@@ -57,12 +57,16 @@ exports.stop_all_app = (appl_name, cb) ->
 # get all exposed ports for a specified app
 exports.get_exposed_ports = (appl_name, cb) ->
   ps (err, containers) ->
+    return cb err if err
     ports = []
 
-    containers.filter((c) -> appl_name is c.image).forEach (i) ->
+    containers.filter(
+      (c) -> appl_name is c.image.split(':')[0] # account for appname:latest stuff
+    ).forEach (i) ->
+      console.log i
       ports = collect ports, i.ports
 
-    cb ports
+    cb null, ports
 
 
 # force-rebuild slug
@@ -205,7 +209,9 @@ exports.on_push = (update, repo, done_cb=null) ->
           ports = []
           header "Exposed ports:"
 
-          containers.filter((c) -> appl_name is c.image).forEach (i) ->
+          containers.filter(
+            (c) -> appl_name is c.image.split(':')[0] # account for appname:latest stuff
+          ).forEach (i) ->
             log "#{chalk.cyan i.command} (#{chalk.green i.id[...4]}) exposes port(s) #{chalk.yellow JSON.stringify(i.ports)}"
             ports = collect ports, i.ports
 
