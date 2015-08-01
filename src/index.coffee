@@ -65,7 +65,10 @@ exports.main = ->
     # rebuild slug
     app.get "/rebuild", admin.can_we_do_admin_things, (req, res) ->
       if req.query.slug
-        deploy.build_slug req.query.slug, (err) ->
+        deploy.build_slug req.query.slug, (log) ->
+          # a status update
+          res.send log
+        , (err) ->
           if err
             res.send
               name: "error.slug.rebuilt"

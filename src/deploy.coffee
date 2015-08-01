@@ -73,7 +73,7 @@ exports.build_slug = (name, cb) ->
   exports.on_push null, path: "/#{name}.git", cb
 
 # user pushed their branch to us!
-exports.on_push = (update, repo, done_cb=null) ->
+exports.on_push = (update, repo, log_cb=null, done_cb=null) ->
   got_all = false
 
   appl_name = repo.path.split('/').reverse()[0].split('.')[...1].join ''
@@ -88,7 +88,7 @@ exports.on_push = (update, repo, done_cb=null) ->
       header "Making app root..."
       try
         mkdirp appl_root, cb
-        set_log_file path.join(appl_root, "deploy.log")
+        set_log_file path.join(appl_root, "deploy.log", log_cb)
       catch e
         cb e
 
