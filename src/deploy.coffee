@@ -152,6 +152,7 @@ exports.on_push = (update, repo, done_cb=null) ->
       header "Running Docker image..."
       reload_config (err, data) ->
         return cb err if err
+        console.log "data:", data
         
         # scale based off of the config settings
         image = data.filter (d) -> d.name is appl_name
@@ -161,6 +162,9 @@ exports.on_push = (update, repo, done_cb=null) ->
           # nothing in the file, so just spawn one of the default containers
           log chalk.red "No scaling settings were specified, so we will create 1 web container."
           scale = web: 1
+
+
+        console.log "scale:", scale
         
         # iterate and spawn the specified number of containers
         for k,v of scale
