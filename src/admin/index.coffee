@@ -7,7 +7,7 @@ exports.admin_page = (config) ->
         <pre>#{["scale", "path"].map((i) -> "#{i}: #{JSON.stringify a[i]}").join '\n'}</pre>
         
         <a href="/rebuild?slug=#{a.path}&token=#{req.query.token}">rebuild slug</a>
-        <a href="/ports?slug=#{a.path}&token=#{req.query.token}">rebuild slug</a>
+        <a href="/ports?slug=#{a.path}&token=#{req.query.token}">get ports</a>
       </li>"""
     )+"</ul>"
 
