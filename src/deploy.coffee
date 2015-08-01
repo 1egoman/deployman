@@ -54,6 +54,18 @@ exports.stop_all_app = (appl_name, cb) ->
       cb err or null
 
 
+# start an app instance
+exports.start_all_app = (appl_name, final_cb) ->
+  ps (err, containers) ->
+    return cb(err) if err
+    async.forEach containers.filter((c) -> appl_name is c.image), (c, cb) ->
+      exec "docker start #{c.id}", (err, sout, serr) ->
+        log sout.toString().trim '\n'
+        log serr.toString().trim '\n'
+        cb err, sout, serr
+    , final_cb
+
+
 # get all exposed ports for a specified app
 exports.get_exposed_ports = (appl_name, cb) ->
   ps (err, containers) ->

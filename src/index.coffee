@@ -95,6 +95,36 @@ exports.main = ->
         res.send "No slug specified. Use ?slug=..."
 
 
+    # start a slug
+    app.get "/start", admin.can_we_do_admin_things, (req, res) ->
+      if req.query.slug
+        appl_name = req.query.slug.split('/').reverse()[0].split('.')[...1].join ''
+        deploy.start_all_app appl_name, (err, data) ->
+          if err
+            res.send
+              name: "error.slug.start"
+              data: "Error starting slug: #{err}"
+          else
+            res.send data: data
+      else
+        res.send "No slug specified. Use ?slug=..."
+
+
+    # stop a slug
+    app.get "/stop", admin.can_we_do_admin_things, (req, res) ->
+      if req.query.slug
+        appl_name = req.query.slug.split('/').reverse()[0].split('.')[...1].join ''
+        deploy.start_all_app appl_name, (err, data) ->
+          if err
+            res.send
+              name: "error.slug.stop"
+              data: "Error stopping slug: #{err}"
+          else
+            res.send data: data
+      else
+        res.send "No slug specified. Use ?slug=..."
+
+
 
 
 
