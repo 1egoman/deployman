@@ -66,15 +66,16 @@ exports.main = ->
     app.get "/rebuild", admin.can_we_do_admin_things, (req, res) ->
       if req.query.slug
         deploy.build_slug req.query.slug, (log) ->
+
           # a status update
-          res.send log
+          # write the correct info to keep the user up to data
+          res.write "#{chalk.stripColor log}\n"
+
         , (err) ->
           if err
-            res.send
-              name: "error.slug.rebuilt"
-              data: "Error rebuilding slug: #{err}"
+            res.write "Error rebuilding slug: #{err}"
           else
-            res.send name: "slug.rebuilt"
+            res.write "Built slug! WOOHOO!"
       else
         res.send "No slug specified. Use ?slug=..."
 
