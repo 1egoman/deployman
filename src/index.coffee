@@ -79,7 +79,8 @@ exports.main = ->
     # get bound ports
     app.get "/ports", admin.can_we_do_admin_things, (req, res) ->
       if req.query.slug
-        deploy.get_exposed_ports req.query.slug, (err, ports) ->
+        appl_name = req.query.slug.split('/').reverse()[0].split('.')[...1].join ''
+        deploy.get_exposed_ports appl_name, (err, ports) ->
           if err
             res.send
               name: "error.slug.ports"
