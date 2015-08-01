@@ -42,10 +42,12 @@ reload_config = exports.reload_config = (cb) ->
 
 
 # stop all instances of the specified app
-exports.stop_all_app = (appl_name, cb) ->
+exports.rm_all_app = (appl_name, cb) ->
   ps (err, containers) ->
     return cb(err) if err
-    async.forEach containers.filter((c) -> appl_name is c.image), (c, cb) ->
+
+    async.forEach containers.filter((c) -> appl_name is c.image.split(':')[0]), (c, cb) ->
+      header "stopping #{c.id}..."
       exec "docker stop #{c.id} && docker rm #{c.id}", (err, sout, serr) ->
         log sout.toString().trim '\n'
         log serr.toString().trim '\n'
@@ -57,8 +59,11 @@ exports.stop_all_app = (appl_name, cb) ->
 # start an app instance
 exports.start_all_app = (appl_name, final_cb) ->
   ps (err, containers) ->
-    return cb(err) if err
-    async.forEach containers.filter((c) -> appl_name is c.image), (c, cb) ->
+    return final_cb(err) if err
+    return final_cb(null, "No ready containers. Issue a rebuild?") if containers.length is 0
+
+    async.forEach containers.filter((c) -> appl_name is c.image.split(':')[0]), (c, cb) ->
+      header "starting #{c.id}..."
       exec "docker start #{c.id}", (err, sout, serr) ->
         log sout.toString().trim '\n'
         log serr.toString().trim '\n'
@@ -172,7 +177,7 @@ exports.on_push = (update, repo, log_cb, done_cb=null) ->
 
     (cb) ->
       header "Stopping old Docker containers..."
-      exports.stop_all_app appl_name, cb
+      exports.rm_all_app appl_name, cb
 
     (cb) ->
       header "Running Docker image..."

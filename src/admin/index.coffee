@@ -9,7 +9,7 @@ exports.admin_page = (config) ->
         <a href="/rebuild?slug=#{a.path}&token=#{req.query.token}">rebuild slug</a>
         <a href="/ports?slug=#{a.path}&token=#{req.query.token}">get ports</a>
         <a href="/start?slug=#{a.path}&token=#{req.query.token}">start</a>
-        <a href="/stop?slug=#{a.path}&token=#{req.query.token}">stop</a>
+        <a href="/rm?slug=#{a.path}&token=#{req.query.token}">delete containers</a>
       </li>"""
     )+"</ul>"
 
