@@ -66,7 +66,6 @@ exports.on_push = (update, repo, done_cb=null) ->
   appl_root = path.join(repos_root, appl_name)
   appl_port = process.env.CONTAINER_PORT or 8000
 
-  set_log_file path.join(appl_root, "deploy.log")
   header "Deploying #{chalk.green appl_name}@#{chalk.cyan repo.path}..."
   async.waterfall [
 
@@ -75,6 +74,7 @@ exports.on_push = (update, repo, done_cb=null) ->
       header "Making app root..."
       try
         mkdirp appl_root, cb
+        set_log_file path.join(appl_root, "deploy.log")
       catch e
         cb e
 
