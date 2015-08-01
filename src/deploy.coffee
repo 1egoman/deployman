@@ -63,7 +63,6 @@ exports.get_exposed_ports = (appl_name, cb) ->
     containers.filter(
       (c) -> appl_name is c.image.split(':')[0] # account for appname:latest stuff
     ).forEach (i) ->
-      console.log i
       ports = collect ports, i.ports
 
     cb null, ports
