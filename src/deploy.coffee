@@ -54,6 +54,17 @@ exports.stop_all_app = (appl_name, cb) ->
       cb err or null
 
 
+# get all exposed ports for a specified app
+exports.get_exposed_ports = (appl_name, cb) ->
+  ps (err, containers) ->
+    ports = []
+
+    containers.filter((c) -> appl_name is c.image).forEach (i) ->
+      ports = collect ports, i.ports
+
+    cb ports
+
+
 # force-rebuild slug
 exports.build_slug = (name, cb) ->
   exports.on_push null, path: "/#{name}.git", cb

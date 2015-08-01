@@ -76,6 +76,17 @@ exports.main = ->
         res.send "No slug specified. Use ?slug=..."
 
 
+    # get bound ports
+    app.get "/ports", admin.can_we_do_admin_things, (req, res) ->
+      if req.query.slug
+        deploy ->
+        if req.query.slug
+          deploy.get_exposed_ports req.query.slug, (ports) ->
+            res.send ports: ports
+        else
+          res.send "No slug specified. Use ?slug=..."
+
+
 
 
 
