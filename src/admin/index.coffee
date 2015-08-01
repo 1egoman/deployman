@@ -10,6 +10,10 @@ exports.admin_page = (config) ->
         <a href="/ports?slug=#{a.path}&token=#{req.query.token}">get ports</a>
         <a href="/start?slug=#{a.path}&token=#{req.query.token}">start</a>
         <a href="/rm?slug=#{a.path}&token=#{req.query.token}">delete containers</a>
+
+
+        <a href="#delete" onclick="document.getElementsByClassName('deleter')[0].style.display = 'inline'" style="color: red;">delete the whole thing</a>
+        <a class="deleter" href="/delete?slug=#{a.path}&token=#{req.query.token}" style="display: none;">Are you sure? Click me if so...</a>
       </li>"""
     )+"</ul>"
 

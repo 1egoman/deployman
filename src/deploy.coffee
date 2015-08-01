@@ -1,6 +1,7 @@
 chalk = require "chalk"
 path = require "path"
 request = require 'request'
+rimraf = require "rimraf"
 
 repos_root = path.join(__dirname, "..", "repos")
 
@@ -83,6 +84,15 @@ exports.get_exposed_ports = (appl_name, cb) ->
       ports = collect ports, i.ports
 
     cb null, ports
+
+# irradicate the app from the filesystem.
+exports.delete_all_of_app = (appl_name, cb) ->
+  exports.rm_all_app appl_name, (err) ->
+    return cb(err) if err
+
+    appl_root = path.join(repos_root, appl_name)
+    rimraf appl_root, (err) ->
+      return cb(err) if err
 
 
 # force-rebuild slug
