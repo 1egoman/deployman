@@ -125,6 +125,21 @@ exports.main = ->
         res.send "No slug specified. Use ?slug=..."
 
 
+    # delete an app
+    app.get "/delete", admin.can_we_do_admin_things, (req, res) ->
+      if req.query.slug
+        appl_name = req.query.slug.split('/').reverse()[0].split('.')[...1].join ''
+        deploy.delete_all_of_app appl_name, (err, data) ->
+          if err
+            res.send
+              name: "error.slug.delete"
+              data: "Error deleting slug: #{err}"
+          else
+            res.send data: data
+      else
+        res.send "No slug specified. Use ?slug=..."
+
+
 
 
 

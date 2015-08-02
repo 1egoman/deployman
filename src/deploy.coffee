@@ -91,8 +91,10 @@ exports.delete_all_of_app = (appl_name, cb) ->
     return cb(err) if err
 
     appl_root = path.join(repos_root, appl_name)
+    log "Deleting #{appl_root}..."
     rimraf appl_root, (err) ->
       return cb(err) if err
+      cb null
 
 
 # force-rebuild slug
